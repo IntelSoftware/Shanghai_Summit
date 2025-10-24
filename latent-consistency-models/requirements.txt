@@ -1,0 +1,32 @@
+# Core dependencies for Latent Consistency Model with OpenVINO
+# Install with: pip install -r requirements.txt
+
+# PyTorch (CPU version)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.1
+
+# Diffusers and model libraries
+diffusers>=0.30.0
+transformers>=4.45
+accelerate
+
+# OpenVINO and Optimum Intel
+openvino>=2025.0
+openvino-tokenizers>=2025.0
+openvino-genai>=2025.0
+git+https://github.com/huggingface/optimum-intel.git
+
+# Quantization
+nncf>=2.12.0
+
+# Data and utilities
+datasets>=2.14.6,<4.0.0
+pillow
+tqdm
+
+# Gradio for interactive demo
+gradio>=4.19
+
+# Jupyter support (optional - for notebook environment)
+jupyter
+ipywidgets
