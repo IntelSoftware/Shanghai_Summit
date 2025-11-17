@@ -2,12 +2,18 @@
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+from utils import get_coordinates, load_config, setup_logging
+
+# Load configuration
+config = load_config()
+logger = setup_logging(__name__)
 
 # Initialize MCP Server
-mcp = FastMCP("weather", host="0.0.0.0", port=8000)
-
-GEOCODE_API = "https://geocoding-api.open-meteo.com/v1/search"
-WEATHER_API = "https://api.open-meteo.com/v1/forecast"
+mcp = FastMCP(
+    config['servers']['weather']['name'],
+    host=config['servers']['weather']['host'],
+    port=config['servers']['weather']['port']
+)
 
 # Weather tool
 
@@ -37,65 +43,52 @@ async def get_weather(location: str) -> str:
              If the location is not found or weather data is unavailable,
              an appropriate error message is returned instead.
     """
-    # Step 1: Geocoding to get latitude/longitude
-    geo_url = f"{GEOCODE_API}?name={location}&count=1&language=en&format=json"
-
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            geo_response = await client.get(geo_url)
-            geo_response.raise_for_status()
-            geo_data = geo_response.json()
-    except httpx.RequestError as e:
-        return f"Network error while fetching coordinates: {str(e)}"
-    except httpx.HTTPStatusError as e:
-        return f"Geocoding API returned an error: {e.response.status_code} {e.response.text}"
-    except Exception as e:
-        return f"Unexpected error during geocoding: {str(e)}"
-
-    if "results" not in geo_data or not geo_data["results"]:
+    logger.info(f"Weather request for: {location}")
+    
+    # Step 1: Geocoding to get latitude/longitude using shared utility
+    lat, lon, country = await get_coordinates(location)
+    
+    if lat is None or lon is None:
         return f"Location '{location}' not found."
-
-    try:
-        result = geo_data["results"][0]
-        lat = result["latitude"]
-        lon = result["longitude"]
-        name = result["name"]
-        country = result.get("country", "Unknown")
-    except Exception as e:
-        return f"Failed to parse geocoding response: {str(e)}"
 
     # Step 2: Get weather forecast
     forecast_url = (
-        f"{WEATHER_API}?latitude={lat}&longitude={lon}"
+        f"{config['apis']['weather']}?latitude={lat}&longitude={lon}"
         "&current_weather=true&timezone=auto"
     )
 
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient(timeout=config['timeouts']['http_request']) as client:
             weather_response = await client.get(forecast_url)
             weather_response.raise_for_status()
             weather_data = weather_response.json()
     except httpx.RequestError as e:
+        logger.error(f"Network error while fetching weather: {e}")
         return f"Network error while fetching weather: {str(e)}"
     except httpx.HTTPStatusError as e:
+        logger.error(f"Weather API error: {e.response.status_code}")
         return (
             f"Weather API returned an error: {e.response.status_code} {e.response.text}"
         )
     except Exception as e:
+        logger.error(f"Unexpected error during weather fetch: {e}")
         return f"Unexpected error during weather fetch: {str(e)}"
 
     if "current_weather" not in weather_data:
-        return f"Weather data not available for '{name}, {country}'."
+        logger.warning(f"No weather data available for '{location}'")
+        return f"Weather data not available for '{location}, {country}'."
 
     try:
         current = weather_data["current_weather"]
         temp = current.get("temperature", "N/A")
         wind = current.get("windspeed", "N/A")
     except Exception as e:
+        logger.error(f"Failed to parse weather data: {e}")
         return f"Failed to parse weather data: {str(e)}"
 
+    logger.info(f"Successfully retrieved weather for {location}")
     return f"""
-        - Location: {name}, {country}
+        - Location: {location}, {country}
         - Coordinates: {lat}, {lon}
         - Temperature: {temp}°C
         - Wind Speed: {wind} km/h

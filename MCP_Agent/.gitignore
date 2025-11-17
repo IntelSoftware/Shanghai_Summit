@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Model files and downloads (large files)
+*.bin
+*.onnx
+*.pt
+*.pth
+*.safetensors
+*.ckpt
+qwen2.5-1.5b-instruct-int8-ov/
+
+# Hugging Face cache
+.cache/
+huggingface/
+
+# OpenVINO IR models
+*.xml
+*.mapping
+
+# Logs
+*.log
+logs/
+
+# Gradio
+gradio_cached_examples/
+flagged/
+
+# Temporary files
+*.tmp
+tmp/
+temp/
+
+# UV lock file (optional - comment out if you want to track it)
+# uv.lock

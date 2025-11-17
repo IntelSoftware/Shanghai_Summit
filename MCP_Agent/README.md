@@ -52,12 +52,15 @@ The servers are created using FastMCP which is a high-level, Pythonic framework 
     │   ├── Generating_safety_guidelines_using_Pytorch_XPU.png             # Output screenshot image 1
     │   ├── WeatherAQI_MCP_Assistant_Workflow.png                          # Workflow image
     │   └── safety_measures.png                                            # Output screenshot image 2
+    ├── config.yaml                                                        # Central configuration file (NEW)
+    ├── utils.py                                                           # Shared utilities module (NEW)
+    ├── server_manager.py                                                  # Server orchestration tool (NEW)
     ├── Readme.md                                                          # Readme file which contains all the details and instructions about the project sample
     ├── 1_weather_server.py                                                # python file that retrives weather information
     ├── 2_Air_Quality_Index_server.py                                      # python file that retrives Air Quality Index(AQI) information
-    ├── 3_LLM_inference_server.py                                          # python file which gives safety guidelines based on weather and AQI reports
-    ├── weather_AQI_MCP_Assistant.ipynb                                    # Notebook file to excute the project sample
-    ├── pyproject.toml                                                     # Requirements for the project sample
+    ├── 4_LLM_Inference_server.py                                          # python file which gives safety guidelines based on weather and AQI reports
+    ├── Weather_AQI_MCP_Assistant.ipynb                                    # Notebook file to excute the project sample
+    ├── pyproject.toml                                                     # Requirements for the project sample (updated with pyyaml)
     └── uv.lock                                                            # File which captures the packages installed for the project sample
 
 ---
@@ -175,7 +178,17 @@ To install any software using commands, Open a new terminal window by right-clic
      - **AQI (Air Quality Index)** (port no - 8001)
      - **LLM (Large Language Model) Inference** (port no - 8002)
   
-   To run them all, open **3 separate terminals**
+   **Option 1: Use Server Manager (Recommended)**
+   
+   Launch all servers with a single command:
+   ```
+   uv run python server_manager.py
+   ```
+   This will start all three servers automatically. Press `Ctrl+C` to gracefully shutdown all servers.
+   
+   **Option 2: Run Individual Servers (Legacy Method)**
+   
+   To run them separately, open **3 separate terminals**
   
    Terminal 1: Start the Weather MCP server
    ```
@@ -187,7 +200,7 @@ To install any software using commands, Open a new terminal window by right-clic
    ```
    Terminal 3: Start the LLM Inferencing MCP server
    ```
-   uv run 3_LLM_inference_server.py
+   uv run 4_LLM_Inference_server.py
    ```
    
 4. Launch Jupyter Lab and Run the notebook:
@@ -206,11 +219,33 @@ To install any software using commands, Open a new terminal window by right-clic
 
 ---
 
+## Configuration
+
+Edit `config.yaml` to customize server settings:
+
+```yaml
+servers:
+  weather:
+    port: 8000  # Change server ports
+  aqi:
+    port: 8001
+  llm:
+    port: 8002
+
+timeouts:
+  http_request: 10  # Adjust API timeouts
+
+logging:
+  level: "INFO"  # Change to DEBUG for verbose output
+```
+
 ## Troubleshooting
 
 - **Dependency Issues:** Run `uv clean` and then `uv sync`.
 - **File Access Issues:** Restart the kernel and run the cells again.
 - **API_KEY Issues:** Make sure the API_KEY for openweathermap is activated before using it.
+- **Servers won't start:** Check if ports are already in use, verify UV environment with `uv sync`
+- **Import errors:** After adding new dependencies, run `uv sync` to install them
 
 ---
 

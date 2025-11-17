@@ -7,9 +7,18 @@ import os
 import asyncio
 import json
 from typing import AsyncGenerator
+from utils import load_config, setup_logging
+
+# Load configuration
+config = load_config()
+logger = setup_logging(__name__)
 
 # Initialize the MCP LLM Server
-mcp = FastMCP("LLM-Inference", host="0.0.0.0", port=8002)
+mcp = FastMCP(
+    config['servers']['llm']['name'],
+    host=config['servers']['llm']['host'],
+    port=config['servers']['llm']['port']
+)
 
 # Device detection for Intel GPU support
 def detect_best_device():
@@ -18,7 +27,7 @@ def detect_best_device():
         import openvino as ov
         core = ov.Core()
         available_devices = core.available_devices
-        print(f"Available OpenVINO devices: {available_devices}")
+        logger.info(f"Available OpenVINO devices: {available_devices}")
         
         # Prefer GPU (Intel iGPU/dGPU) if available, fallback to CPU
         if any("GPU" in device for device in available_devices):
@@ -26,12 +35,12 @@ def detect_best_device():
         else:
             return "CPU"
     except Exception as e:
-        print(f"Device detection failed: {e}, using CPU")
+        logger.warning(f"Device detection failed: {e}, using CPU")
         return "CPU"
 
 device = detect_best_device()
 # device = "NPU"
-print(f"Selected device: {device}")
+logger.info(f"Selected device: {device}")
 generator = None
 model_type = None
 
@@ -40,34 +49,34 @@ try:
     model_name = "OpenVINO/qwen2.5-1.5b-instruct-int8-ov"
     model_path = "qwen2.5-1.5b-instruct-int8-ov"
     
-    print(f"Attempting to load OpenVINO model: {model_name}")
-    print("This may take several minutes for first-time download...")
+    logger.info(f"Attempting to load OpenVINO model: {model_name}")
+    logger.info("This may take several minutes for first-time download...")
     
     # Download model if not present
     if not os.path.exists(model_path):
-        print(f"Downloading model to {model_path}...")
+        logger.info(f"Downloading model to {model_path}...")
         hf_hub.snapshot_download(model_name, local_dir=model_path)
     
-    print(f"Loading OpenVINO GenAI pipeline on {device}...")
+    logger.info(f"Loading OpenVINO GenAI pipeline on {device}...")
     try:
         generator = ov_genai.LLMPipeline(model_path, device)
-        config = ov_genai.GenerationConfig()
-        config.max_new_tokens = 500
-        print(f"Successfully loaded OpenVINO Qwen model on {device}: {model_name}")
+        gen_config = ov_genai.GenerationConfig()
+        gen_config.max_new_tokens = 500
+        logger.info(f"Successfully loaded OpenVINO Qwen model on {device}: {model_name}")
         model_type = "openvino"
     except Exception as device_error:
         if device == "GPU":
-            print(f"GPU loading failed: {device_error}")
-            print("Falling back to CPU for OpenVINO...")
+            logger.warning(f"GPU loading failed: {device_error}")
+            logger.info("Falling back to CPU for OpenVINO...")
             generator = ov_genai.LLMPipeline(model_path, "CPU")
-            print(f"Successfully loaded OpenVINO Qwen model on CPU: {model_name}")
+            logger.info(f"Successfully loaded OpenVINO Qwen model on CPU: {model_name}")
             model_type = "openvino"
         else:
             raise device_error
     
 except Exception as qwen_error:
-    print(f"Failed to load OpenVINO Qwen model: {qwen_error}")
-    print("Falling back to smaller DistilGPT-2 model...")
+    logger.warning(f"Failed to load OpenVINO Qwen model: {qwen_error}")
+    logger.info("Falling back to smaller DistilGPT-2 model...")
     
     try:
         # Fallback to smaller model using transformers
@@ -83,11 +92,11 @@ except Exception as qwen_error:
             pad_token_id=50256
         )
         
-        print(f"Successfully loaded fallback model: {model_name}")
+        logger.info(f"Successfully loaded fallback model: {model_name}")
         model_type = "transformers"
         
     except Exception as fallback_error:
-        print(f"Failed to load fallback model: {fallback_error}")
+        logger.error(f"Failed to load fallback model: {fallback_error}")
         generator = None
         model_type = None
 
