@@ -3,51 +3,22 @@ from fastmcp import FastMCP
 import httpx
 import os
 from dotenv import load_dotenv
+from utils import get_coordinates, load_config, setup_logging
+
+# Load configuration
+config = load_config()
+logger = setup_logging(__name__)
 
 # Initialize MCP Server
-mcp = FastMCP("Air Quality Index", host="0.0.0.0", port=8001)
+mcp = FastMCP(
+    config['servers']['aqi']['name'],
+    host=config['servers']['aqi']['host'],
+    port=config['servers']['aqi']['port']
+)
 
 # Load API key for OpenWeatherMap AQI
 load_dotenv()
 OPENWEATHERMAP_API_KEY = os.getenv("AQI_API_KEY")
-
-
-# Geocoding function to get latitude/longitude from location using Open-Meteo
-async def get_coordinates(location: str):
-    """
-    Fetch the geographical coordinates (latitude and longitude)
-    and country name for a given location using the Open-Meteo Geocoding API.
-
-    Args:
-        location (str): The name of the location to geocode (e.g., 'Delhi').
-
-    Returns:
-        tuple: A tuple containing:
-            - latitude (float or None): The latitude of the location.
-            - longitude (float or None): The longitude of the location.
-            - country (str or None): The country name of the location.
-        If the location cannot be found, returns (None, None, None).
-    """
-    geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={location}&count=1"
-    try:
-        async with httpx.AsyncClient() as client:
-            geo_response = await client.get(geo_url)
-            geo_response.raise_for_status()  # raises HTTPStatusError for bad responses
-            geo_data = geo_response.json()
-
-        if "results" not in geo_data or not geo_data["results"]:
-            return None, None, None
-
-        result = geo_data["results"][0]
-        return result["latitude"], result["longitude"], result["country"]
-
-    except httpx.HTTPError as http_err:
-        print(f"HTTP error occurred: {http_err}")
-    except Exception as err:
-        print(f"An error occurred: {err}")
-
-    return None, None, None
-
 
 # AQI Tool
 
@@ -77,13 +48,14 @@ async def get_aqi(location: str) -> str:
             - Network request fails
             - Invalid response is received
     """
+    logger.info(f"AQI request for: {location}")
+    
     if not OPENWEATHERMAP_API_KEY:
+        logger.error("AQI API key is missing")
         return "AQI API key is missing. Set the 'AQI_API_KEY' environment variable."
 
-    try:
-        lat, lon, country = await get_coordinates(location)
-    except Exception as e:
-        return f"Failed to get coordinates for '{location}': {str(e)}"
+    # Use shared geocoding utility
+    lat, lon, country = await get_coordinates(location)
 
     if lat is None or lon is None:
         return f"Unable to get coordinates for '{location}'."
@@ -94,18 +66,22 @@ async def get_aqi(location: str) -> str:
     )
 
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient(timeout=config['timeouts']['http_request']) as client:
             response = await client.get(aqi_url)
             response.raise_for_status()  # Raises an HTTPStatusError for 4xx/5xx
             aqi_data = response.json()
     except httpx.RequestError as e:
+        logger.error(f"Network error while fetching AQI: {e}")
         return f"Network error while fetching AQI: {str(e)}"
     except httpx.HTTPStatusError as e:
+        logger.error(f"AQI API error: {e.response.status_code}")
         return f"API returned an error: {e.response.status_code} {e.response.text}"
     except Exception as e:
+        logger.error(f"Unexpected error while fetching AQI: {e}")
         return f"Unexpected error while fetching AQI: {str(e)}"
 
     if "list" not in aqi_data or not aqi_data["list"]:
+        logger.warning(f"No AQI data found for '{location}'")
         return f"No AQI data found for '{location}'."
 
     try:
@@ -114,6 +90,8 @@ async def get_aqi(location: str) -> str:
         # AQI level explanation based on OpenWeatherMap
         levels = {1: "Good", 2: "Fair", 3: "Moderate", 4: "Poor", 5: "Very Poor"}
 
+        logger.info(f"Successfully retrieved AQI for {location}: {aqi} ({levels.get(aqi, 'Unknown')})")
+        
         return f"""
     - Location: {location}, {country}
     - Coordinates: {lat}, {lon}
@@ -130,6 +108,7 @@ async def get_aqi(location: str) -> str:
      - NH3: {components.get('nh3', 'N/A')}
      """
     except Exception as e:
+        logger.error(f"Failed to parse AQI response: {e}")
         return f"Failed to parse AQI response: {str(e)}"
 
 

@@ -1,0 +1,25 @@
+servers:
+  weather:
+    host: "127.0.0.1"
+    port: 8000
+    name: "Weather Server"
+  aqi:
+    host: "127.0.0.1"
+    port: 8001
+    name: "Air Quality Index"
+  llm:
+    host: "127.0.0.1"
+    port: 8002
+    name: "LLM-Inference"
+
+apis:
+  geocoding: "https://geocoding-api.open-meteo.com/v1/search"
+  weather: "https://api.open-meteo.com/v1/forecast"
+
+timeouts:
+  http_request: 10
+  server_startup: 3
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
