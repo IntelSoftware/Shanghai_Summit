@@ -1,0 +1,9 @@
+[project]
+name = "hello-openvino"
+version = "0.1.0"
+description = "which devices are here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "openvino>=2025.3.0",
+]
