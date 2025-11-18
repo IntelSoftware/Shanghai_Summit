@@ -17,7 +17,8 @@ apis:
   weather: "https://api.open-meteo.com/v1/forecast"
 
 timeouts:
-  http_request: 10
+  http_request: 30
+  llm_inference: 60
   server_startup: 3
 
 logging:

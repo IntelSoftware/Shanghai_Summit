@@ -45,7 +45,7 @@ async def get_coordinates(location: str) -> Tuple[Optional[float], Optional[floa
     location names into latitude/longitude coordinates.
     
     Args:
-        location: City or country name (e.g., 'Delhi', 'Tokyo', 'New York')
+        location: City or country name (e.g., 'Delhi', 'Tokyo', 'New York', 'Hillsboro, Oregon, US')
         
     Returns:
         Tuple of (latitude, longitude, country) or (None, None, None) if not found
@@ -55,7 +55,11 @@ async def get_coordinates(location: str) -> Tuple[Optional[float], Optional[floa
         >>> print(f"{lat}, {lon} in {country}")
         48.8566, 2.3522 in France
     """
-    geo_url = f"{config['apis']['geocoding']}?name={location}&count=1&language=en&format=json"
+    from urllib.parse import quote
+    
+    # Try with the full location string first
+    encoded_location = quote(location)
+    geo_url = f"{config['apis']['geocoding']}?name={encoded_location}&count=10&language=en&format=json"
     
     try:
         async with httpx.AsyncClient(timeout=config['timeouts']['http_request']) as client:
@@ -64,8 +68,20 @@ async def get_coordinates(location: str) -> Tuple[Optional[float], Optional[floa
             data = response.json()
             
         if "results" not in data or not data["results"]:
-            logger.warning(f"Location '{location}' not found")
-            return None, None, None
+            # If full string fails, try with just the first part (city name)
+            city_only = location.split(',')[0].strip()
+            logger.info(f"Retrying with city only: '{city_only}'")
+            encoded_location = quote(city_only)
+            geo_url = f"{config['apis']['geocoding']}?name={encoded_location}&count=10&language=en&format=json"
+            
+            async with httpx.AsyncClient(timeout=config['timeouts']['http_request']) as client:
+                response = await client.get(geo_url)
+                response.raise_for_status()
+                data = response.json()
+            
+            if "results" not in data or not data["results"]:
+                logger.warning(f"Location '{location}' not found")
+                return None, None, None
             
         result = data["results"][0]
         lat = result["latitude"]
