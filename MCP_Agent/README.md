@@ -41,7 +41,63 @@ The servers are created using FastMCP which is a high-level, Pythonic framework 
 **Final result:**
    - The final output from the LLM (e.g., safety advice, health risks, and precautions) is sent back to the MCP client, which presents it to the user.
 
-![How it works](./assets/WeatherAQI_MCP_Assistant_Workflow.png)
+```mermaid
+graph TB
+    User[👤 User Input<br/>Location: Tokyo, Hillsboro, etc.]
+    
+    subgraph Gradio["🌐 Gradio UI - MCP Client (Notebook)"]
+        Client[MCP Client<br/>AQI_Weather_Advisor]
+    end
+    
+    subgraph MCP_Servers["🖥️ MCP Servers (FastMCP)"]
+        Weather[Weather Server<br/>Port 8000]
+        AQI[AQI Server<br/>Port 8001]
+        LLM[LLM Inference Server<br/>Port 8002<br/>OpenVINO Qwen 1.5B]
+    end
+    
+    subgraph External_APIs["☁️ External APIs"]
+        GeoAPI[Open-Meteo<br/>Geocoding API]
+        WeatherAPI[Open-Meteo<br/>Weather Forecast API]
+        AQIAPI[OpenWeatherMap<br/>Air Pollution API]
+    end
+    
+    User -->|Enter Location| Client
+    
+    Client -->|1. Parallel Requests| Weather
+    Client -->|1. Parallel Requests| AQI
+    
+    Weather -->|Get Coordinates| GeoAPI
+    GeoAPI -->|lat, lon, country| Weather
+    Weather -->|Get Weather Data| WeatherAPI
+    WeatherAPI -->|temp, wind, etc.| Weather
+    Weather -->|Weather Report| Client
+    
+    AQI -->|Get Coordinates| GeoAPI
+    GeoAPI -->|lat, lon, country| AQI
+    AQI -->|Get AQI Data| AQIAPI
+    AQIAPI -->|AQI level, pollutants| AQI
+    AQI -->|AQI Report| Client
+    
+    Client -->|2. Combined Data| LLM
+    LLM -->|Generate Health<br/>Recommendations| LLM
+    LLM -->|Safety Guidelines| Client
+    
+    Client -->|Display Results| User
+    
+    style User fill:#e1f5ff
+    style Client fill:#fff4e6
+    style Weather fill:#e8f5e9
+    style AQI fill:#e8f5e9
+    style LLM fill:#f3e5f5
+    style GeoAPI fill:#fce4ec
+    style WeatherAPI fill:#fce4ec
+    style AQIAPI fill:#fce4ec
+```
+
+**Workflow Details:**
+- **Step 1:** Weather and AQI requests run in parallel (~2-3 seconds)
+- **Step 2:** Combined reports sent to LLM for analysis (~20-30 seconds)
+- **Total Time:** ~25-35 seconds end-to-end
 
 ---
 
@@ -52,16 +108,23 @@ The servers are created using FastMCP which is a high-level, Pythonic framework 
     │   ├── Generating_safety_guidelines_using_Pytorch_XPU.png             # Output screenshot image 1
     │   ├── WeatherAQI_MCP_Assistant_Workflow.png                          # Workflow image
     │   └── safety_measures.png                                            # Output screenshot image 2
-    ├── config.yaml                                                        # Central configuration file (NEW)
-    ├── utils.py                                                           # Shared utilities module (NEW)
-    ├── server_manager.py                                                  # Server orchestration tool (NEW)
-    ├── Readme.md                                                          # Readme file which contains all the details and instructions about the project sample
-    ├── 1_weather_server.py                                                # python file that retrives weather information
-    ├── 2_Air_Quality_Index_server.py                                      # python file that retrives Air Quality Index(AQI) information
-    ├── 4_LLM_Inference_server.py                                          # python file which gives safety guidelines based on weather and AQI reports
-    ├── Weather_AQI_MCP_Assistant.ipynb                                    # Notebook file to excute the project sample
-    ├── pyproject.toml                                                     # Requirements for the project sample (updated with pyyaml)
-    └── uv.lock                                                            # File which captures the packages installed for the project sample
+    ├── mcp_servers/                                                       # MCP server implementations
+    │   ├── 1_weather_server.py                                            # Weather data MCP server
+    │   ├── 2_Air_Quality_Index_server.py                                  # Air Quality Index MCP server
+    │   ├── 4_LLM_Inference_server.py                                      # LLM inference MCP server (OpenVINO optimized)
+    │   ├── 8_smart_city.py                                                # Smart city MCP server (additional)
+    │   └── 9_LLM_OV_Server.py                                             # Alternative LLM server (additional)
+    ├── utilities/                                                         # Test and utility scripts
+    │   ├── test_data_formats.py                                           # Validates Weather/AQI output formats
+    │   ├── test_llm.py                                                    # End-to-end LLM testing with hardcoded data
+    │   └── test_llm_connection.py                                         # LLM server connection testing
+    ├── config.yaml                                                        # Central configuration file
+    ├── utils.py                                                           # Shared utilities (geocoding, logging, config)
+    ├── start_mcp_servers_for_nb_1.py                                      # Server orchestration tool
+    ├── README.md                                                          # Project documentation
+    ├── 1_Weather_AQI_MCP_Assistant.ipynb                                  # Main Gradio notebook for the assistant
+    ├── pyproject.toml                                                     # Project dependencies
+    └── uv.lock                                                            # Locked dependency versions
 
 ---
 
@@ -78,6 +141,7 @@ This project uses two public APIs to provide real-time weather and air quality i
   2. **OpenWeatherMap API**\
      Purpose:
       - Provides Air Quality Index (AQI) and detailed pollutant data for any coordinates
+      - An API key is required to access the AQI endpoints.
      
      Usage:
       - OpenWeatherMap requires an API key for all AQI endpoints.
@@ -153,12 +217,10 @@ To install any software using commands, Open a new terminal window by right-clic
 
 ---
 
-## Running the Sample && execution output
+## Running the Weather, AQI, and LLM MCP Assistant
    
-1. In the Command Prompt/terminal, navigate to `WeatherAQI MCP Assistant` folder after cloning the sample:
-   ```
-   cd <path/to/Weather-AQI MCP Assistant/folder>
-   ```
+1. In the Command Prompt/terminal, navigate to `MCP_Agent` folder after cloning the sample:
+
    
 2. Log in to Hugging Face, generate a token, and download the required model:\
 
@@ -169,8 +231,9 @@ To install any software using commands, Open a new terminal window by right-clic
    ```
    This command will prompt you for a token. Copy-paste yours and press Enter.
    ```
-   uv run huggingface-cli download Qwen/Qwen2.5-3B-Instruct
+   uv run huggingface-cli download OpenVINO/qwen2.5-1.5b-instruct-int8-ov
    ```
+   This downloads the OpenVINO-optimized INT8 quantized model for faster inference on Intel hardware.
 3. Run all MCP servers locally:
 
    This sample has 3 MCP servers (runs on 3 different ports):
@@ -178,38 +241,24 @@ To install any software using commands, Open a new terminal window by right-clic
      - **AQI (Air Quality Index)** (port no - 8001)
      - **LLM (Large Language Model) Inference** (port no - 8002)
   
-   **Option 1: Use Server Manager (Recommended)**
+   **Use Server Manager**
    
    Launch all servers with a single command:
    ```
-   uv run python server_manager.py
+   uv run python start_mcp_servers_for_nb_1.py
    ```
    This will start all three servers automatically. Press `Ctrl+C` to gracefully shutdown all servers.
+
+
+4. Launch Jupyter Lab and Run the notebook from a new terminal window:
    
-   **Option 2: Run Individual Servers (Legacy Method)**
-   
-   To run them separately, open **3 separate terminals**
-  
-   Terminal 1: Start the Weather MCP server
-   ```
-   uv run 1_weather_server.py
-   ```
-   Terminal 2: Start the AQI MCP server
-   ```
-   uv run 2_Air_Quality_Index_server.py
-   ```
-   Terminal 3: Start the LLM Inferencing MCP server
-   ```
-   uv run 4_LLM_Inference_server.py
-   ```
-   
-4. Launch Jupyter Lab and Run the notebook:
-   
-   Open the [Weather-AQI MCP Assistant](./Weather_AQI_MCP_Assistant.ipynb) notebook in the Jupyter Lab.
-   - In the Jupyter Lab go to the kernel menu in the top-right corner of the notebook interface and choose default kernel i.e. `Python 3 (ipykernel)` from the available kernels list and run the code cells one by one in the notebook.
    ```
    uv run jupyter lab
    ```
+   
+   Open the [1_Weather-AQI MCP Assistant](./1_Weather_AQI_MCP_Assistant.ipynb) notebook in the Jupyter Lab.
+   - In the Jupyter Lab go to the kernel menu in the top-right corner of the notebook interface and choose default kernel i.e. `aqi` from the available kernels list and run the code cells one by one in the notebook.
+
 
 6. GPU utilization can be seen in the Task Manager while generating safety guidelines for the requested location which are processing on Intel XPUs.
    ![Generating_safety_guidelines_using_Pytorch_XPU](./assets/Generating_safety_guidelines_using_Pytorch_XPU.png)
@@ -239,13 +288,27 @@ logging:
   level: "INFO"  # Change to DEBUG for verbose output
 ```
 
+## Performance Optimizations
+
+The LLM inference server has been optimized for reliability and performance:
+
+- **Token Limit:** Set to 500 tokens for complete responses without system overload
+
+- **Typical Performance:**
+  - Weather + AQI fetch: ~2-3 seconds (parallel)
+  - LLM inference: ~20-30 seconds
+  - Total end-to-end: ~25-35 seconds
+
 ## Troubleshooting
 
 - **Dependency Issues:** Run `uv clean` and then `uv sync`.
 - **File Access Issues:** Restart the kernel and run the cells again.
 - **API_KEY Issues:** Make sure the API_KEY for openweathermap is activated before using it.
-- **Servers won't start:** Check if ports are already in use, verify UV environment with `uv sync`
+- **Servers won't start:** Check if ports 8000-8002 are already in use, verify UV environment with `uv sync`
 - **Import errors:** After adding new dependencies, run `uv sync` to install them
+- **LLM hangs or crashes:** Ensure you're using the correct OpenVINO model (qwen2.5-1.5b-instruct-int8-ov)
+- **Connection timeouts:** The LLM server may take 30-60 seconds on first run while loading the model
+- **Testing utilities:** Use scripts in `utilities/` folder to validate individual components
 
 ---
 
