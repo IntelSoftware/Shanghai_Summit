@@ -239,6 +239,8 @@ To install any software using commands, Open a new terminal window by right-clic
    ```bash
    ollama pull qwen2.5-vl
    # OR
+   ollaa pull qwen3-vl:latest
+   # OR
    ollama pull llama3.2-vision
    # OR  
    ollama pull llava
