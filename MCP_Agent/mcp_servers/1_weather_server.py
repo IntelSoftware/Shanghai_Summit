@@ -1,5 +1,9 @@
 # weather_server.py
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import httpx
 from mcp.server.fastmcp import FastMCP
 from utils import get_coordinates, load_config, setup_logging
