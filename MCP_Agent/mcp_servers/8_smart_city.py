@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Real-time Smart City Intelligence MCP Server
 Integrates with actual APIs for live traffic, energy, and city data
 """
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import asyncio
 import httpx

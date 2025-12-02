@@ -17,6 +17,7 @@ import asyncio
 import subprocess
 import sys
 import signal
+import os
 from pathlib import Path
 from utils import load_config, setup_logging
 
@@ -78,7 +79,10 @@ class ServerManager:
                     ["uv", "run", "python", str(script_path)],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    text=True
+                    text=True,
+                    encoding='utf-8',
+                    errors='replace',
+                    env={**os.environ, 'PYTHONIOENCODING': 'utf-8'}
                 )
                 self.processes.append((name, proc, port))
                 logger.info(f"   ✓ {name} started (PID: {proc.pid})")
